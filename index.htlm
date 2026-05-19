@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Flappy Heart – Para Noa 💘</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #2d1b2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            height: 100dvh;
+            font-family: 'Segoe UI', 'Georgia', serif;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+        .game-container {
+            position: relative;
+            width: 100%;
+            max-width: 450px;
+            height: 100%;
+            max-height: 700px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 20px;
+            box-shadow: 0 0 30px rgba(255, 105, 180, 0.5);
+            background: linear-gradient(180deg, #f9d5e5 0%, #e8b7d0 60%, #c8a2c8 100%);
+            display: block;
+        }
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.3);
+            backdrop-filter: blur(4px);
+            border-radius: 20px;
+            z-index: 10;
+            transition: opacity 0.3s;
+        }
+        .overlay.oculto {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .tarjeta {
+            background: rgba(255, 240, 245, 0.95);
+            backdrop-filter: blur(12px);
+            padding: 2rem;
+            border-radius: 30px;
+            text-align: center;
+            max-width: 340px;
+            width: 90%;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+            animation: flotar 2s ease-in-out infinite;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .tarjeta.carta-especial {
+            max-height: 80vh;
+            overflow-y: auto;
+            text-align: left;
+            background: #fff0f5;
+            border: 3px solid #ffb6c1;
+            padding: 1.8rem;
+        }
+        @keyframes flotar {
+            0%,100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        .tarjeta h1, .tarjeta h2 {
+            color: #c0392b;
+        }
+        .tarjeta .emoji {
+            font-size: 3em;
+            display: block;
+        }
+        input {
+            padding: 12px 20px;
+            border-radius: 30px;
+            border: 2px solid #f0b0c0;
+            font-size: 1.1em;
+            text-align: center;
+            width: 100%;
+            margin: 10px 0;
+            background: #fff5f9;
+            color: #5a3040;
+            outline: none;
+        }
+        button {
+            padding: 12px 35px;
+            border-radius: 30px;
+            border: none;
+            background: #e84393;
+            color: white;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: transform 0.2s;
+            width: 100%;
+        }
+        button:active { transform: scale(0.95); }
+        #mensaje-gameover {
+            font-size: 1.2em;
+            color: #b71540;
+            margin: 10px 0;
+            line-height: 1.5;
+        }
+        .te-amo {
+            font-size: 2.2em;
+            font-weight: bold;
+            color: #e84393;
+            display: block;
+            margin: 8px 0;
+        }
+        .carta-texto {
+            font-size: 0.95em;
+            line-height: 1.6;
+            color: #4a2030;
+            white-space: pre-line;
+            margin-bottom: 15px;
+            font-family: 'Georgia', serif;
+        }
+        .nombre-destacado {
+            font-weight: bold;
+            font-size: 1.3em;
+            color: #e84393;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <canvas id="flappyCanvas"></canvas>
+
+    <!-- Pantalla de inicio -->
+    <div class="overlay" id="overlay-inicio">
+        <div class="tarjeta">
+            <span class="emoji">💖</span>
+            <h1>Flappy Heart</h1>
+            <p style="color:#b05a7a;">Un regalo para volar juntos</p>
+            <input type="text" id="nombreInput" placeholder="Escribe su nombre..." maxlength="20" autocomplete="off">
+            <button id="btnIniciar">💕 Jugar 💕</button>
+        </div>
+    </div>
+
+    <!-- Pantalla de Game Over -->
+    <div class="overlay oculto" id="overlay-gameover">
+        <div class="tarjeta">
+            <span class="emoji">💔</span>
+            <div id="mensaje-gameover"></div>
+            <p style="color:#b05a7a;">Puntuación: <span id="scoreFinal">0</span></p>
+            <button id="btnReiniciar">✨ Intentar otra vez ✨</button>
+        </div>
+    </div>
+
+    <!-- Carta especial al llegar a 10 puntos -->
+    <div class="overlay oculto" id="overlay-carta">
+        <div class="tarjeta carta-especial">
+            <span class="emoji">💌</span>
+            <div id="carta-texto" class="carta-texto"></div>
+            <button id="btnCerrarCarta">❤️ Seguir jugando ❤️</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ---------- PARÁMETROS FÁCILES ----------
+        const GRAVEDAD = 0.32;
+        const IMPULSO = -5.5;
+        const HUECO = 155;
+        const VELOCIDAD_TUBOS = 2.0;
+        const DISTANCIA_ENTRE_TUBOS = 250;
+
+        // ---------- MENSAJE DE LA CARTA (CORREGIDO Y AMPLIADO) ----------
+        const MENSAJE_CARTA = `Noa mi niña hermosa te amo muchísimo amor y no te dejaré nunca, sé que no estás pasando este mes un buen momento pero que sepas que aunque no lo creas eres hermosa y yo cada día estoy más enamorado de ti y estoy muy muy feliz de tenerte mi niña, te amo y recuerda que eres la mejor mi niña, pronto viviremos juntos y te podré besar cada segundo mi muñequita hermosa, eres un amor.
+
+Te amo muñequita linda perfecta, guapa y monísima
+deslumbrante repampinante y flaquísima
+la reina inteligente y listísima
+la dueña de mi corazón preciosísima
+
+Una hermosa como no ha visto el universo
+la única guapa a la que voy a escribir versos
+un amor que el ser humano no ha visto en la vida
+pero que yo te lo voy a dar cada día.
+
+Un beso una palabra una mirada
+cuando estemos juntos no te dejaré por nada
+mi exclusiva noviecita que conmigo será mimada
+porque la quiero más que un niño sediento a la limonada
+
+La amo de todas las formas posibles y con todo mi amor
+porque mi niña recuerda que eres la mejor
+la amaré en casa en un yate o incluso en la playa
+si por ella es subiría incluso la más alta montaña
+
+Muchas cosas podrían parecer que no son verdad
+pero lo que yo no creo es que haya conocido a mi vida con tan poca edad
+mucha gente pensará que tu perfección es mentira
+pero a esos ni caso, quédate conmigo que quiero estar junto a ti toda mi vida
+
+Te amo mucho amor chica flaquita
+mi corazón de melón, bonita
+para este último recuerda que te digo pensando y con razón
+que si algún día muero y me encuentran te tendré dentro de mi corazón
+que si algún día mi cerebro se detiene mirando
+verán que lo últimos minutos estuve en ti pensando
+que si los ojos me cogieran y los fueran a mirar
+verían tu figura linda que amo contemplar
+y que si las palmas de mis manos cogieran y escanearan
+descubrirán que desde que te toqué la carita linda muy felices estaban.
+
+Te amo Noa mi niña hermosa`;
+
+        // ---------- ELEMENTOS ----------
+        const canvas = document.getElementById('flappyCanvas');
+        const ctx = canvas.getContext('2d');
+        const overlayInicio = document.getElementById('overlay-inicio');
+        const overlayGameOver = document.getElementById('overlay-gameover');
+        const overlayCarta = document.getElementById('overlay-carta');
+        const nombreInput = document.getElementById('nombreInput');
+        const btnIniciar = document.getElementById('btnIniciar');
+        const btnReiniciar = document.getElementById('btnReiniciar');
+        const btnCerrarCarta = document.getElementById('btnCerrarCarta');
+        const mensajeGameOverDiv = document.getElementById('mensaje-gameover');
+        const scoreFinalSpan = document.getElementById('scoreFinal');
+        const cartaTexto = document.getElementById('carta-texto');
+
+        let nombreNovia = '';
+        let juegoActivo = false;
+        let juegoTerminado = false;
+        let mostrandoCarta = false;
+        let cartaMostrada = false;
+        let puntuacion = 0;
+        let mejorPuntuacion = 0;
+
+        const ANCHO = 400;
+        const ALTO = 600;
+        let frameContador = 0;
+        let idAnimacion = null;
+
+        const pajaro = {
+            x: 80,
+            y: ALTO / 2,
+            ancho: 32,
+            alto: 28,
+            velocidad: 0,
+            rotacion: 0,
+            enSuelo: false,
+            tiempoInicioSuelo: 0,
+        };
+
+        let obstaculos = [];
+        const ANCHO_TUBO = 52;
+        let particulas = [];
+
+        // Audio
+        let audioCtx = null;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+        function beep(frec, dur, tipo='square', vol=0.08) {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = tipo;
+            osc.frequency.setValueAtTime(frec, t);
+            gain.gain.setValueAtTime(vol, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(t);
+            osc.stop(t + dur);
+        }
+
+        // ---------- DIBUJOS ----------
+        function dibujarFondo() {
+            const grad = ctx.createLinearGradient(0, 0, 0, ALTO);
+            grad.addColorStop(0, '#f9d5e5');
+            grad.addColorStop(0.7, '#e8b7d0');
+            grad.addColorStop(1, '#c8a2c8');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, ANCHO, ALTO);
+
+            for (let i = 0; i < 5; i++) {
+                const nx = (i * 110 + frameContador * 0.2) % (ANCHO + 80) - 40;
+                const ny = 50 + i * 50 + Math.sin(frameContador * 0.02 + i) * 10;
+                dibujarCorazon(nx, ny, 20, 'rgba(255,255,255,0.4)', 0);
+            }
+            ctx.fillStyle = '#d4a0b0';
+            ctx.fillRect(0, ALTO - 25, ANCHO, 25);
+            ctx.fillStyle = '#c48a9b';
+            for (let i=0;i<15;i++) {
+                dibujarCorazon(i*28+4, ALTO-12, 10, '#fff0f3', 0);
+            }
+        }
+
+        function dibujarCorazon(x, y, tam, color, rot=0) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(rot);
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            const s = tam;
+            const topCurveHeight = s * 0.3;
+            ctx.moveTo(0, topCurveHeight);
+            ctx.bezierCurveTo(-s/2, -s*0.15, -s/2, topCurveHeight+s*0.25, 0, topCurveHeight+s*0.55);
+            ctx.bezierCurveTo(s/2, topCurveHeight+s*0.25, s/2, -s*0.15, 0, topCurveHeight);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.35)';
+            ctx.beginPath();
+            ctx.arc(-s*0.12, topCurveHeight+s*0.06, s*0.13, 0, Math.PI*2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function dibujarPajaro() {
+            ctx.save();
+            ctx.translate(pajaro.x, pajaro.y);
+            ctx.rotate(pajaro.rotacion);
+
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.beginPath();
+            ctx.ellipse(2, 4, 15, 10, 0, 0, Math.PI*2);
+            ctx.fill();
+
+            dibujarCorazon(0, 0, pajaro.ancho, '#e84393', 0);
+
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(-7, -8, 5, 0, Math.PI*2);
+            ctx.arc(7, -8, 5, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = '#2c3e50';
+            ctx.beginPath();
+            ctx.arc(-7, -8, 2.5, 0, Math.PI*2);
+            ctx.arc(7, -8, 2.5, 0, Math.PI*2);
+            ctx.fill();
+
+            const aleteo = Math.sin(frameContador * 0.5) * 0.6;
+            ctx.save();
+            ctx.translate(-18, -2);
+            ctx.rotate(-0.3 + aleteo * 0.8);
+            dibujarCorazon(0, 0, 22, '#ff6b81', 0);
+            ctx.restore();
+            ctx.save();
+            ctx.translate(18, -2);
+            ctx.rotate(0.3 - aleteo * 0.8);
+            dibujarCorazon(0, 0, 22, '#ff6b81', 0);
+            ctx.restore();
+
+            ctx.restore();
+        }
+
+        function dibujarObstaculo(tubo) {
+            const corazonSize = 16;
+            for (let y = tubo.top - corazonSize; y >= -corazonSize; y -= corazonSize+2) {
+                dibujarCorazon(tubo.x + ANCHO_TUBO/2, y + corazonSize/2, corazonSize, '#f8a5c2', 0);
+                dibujarCorazon(tubo.x + ANCHO_TUBO/2, y + corazonSize/2, corazonSize-3, '#e84393', 0);
+            }
+            for (let y = tubo.bottom + corazonSize; y <= ALTO+corazonSize; y += corazonSize+2) {
+                dibujarCorazon(tubo.x + ANCHO_TUBO/2, y - corazonSize/2, corazonSize, '#f8a5c2', 0);
+                dibujarCorazon(tubo.x + ANCHO_TUBO/2, y - corazonSize/2, corazonSize-3, '#e84393', 0);
+            }
+            ctx.fillStyle = '#d6336c';
+            ctx.fillRect(tubo.x, tubo.top-2, ANCHO_TUBO, 4);
+            ctx.fillRect(tubo.x, tubo.bottom-2, ANCHO_TUBO, 4);
+        }
+
+        function crearParticulas(x, y) {
+            for (let i=0;i<12;i++) {
+                particulas.push({
+                    x, y,
+                    vx: (Math.random()-0.5)*4,
+                    vy: (Math.random()-0.5)*4 -2,
+                    vida: 1,
+                    decaimiento: 0.02 + Math.random()*0.04,
+                    tam: 4 + Math.random()*6,
+                });
+            }
+        }
+
+        function actualizarParticulas() {
+            particulas = particulas.filter(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.1;
+                p.vida -= p.decaimiento;
+                return p.vida > 0;
+            });
+        }
+
+        function dibujarParticulas() {
+            particulas.forEach(p => {
+                ctx.fillStyle = `rgba(255,75,117,${p.vida})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.tam, 0, Math.PI*2);
+                ctx.fill();
+            });
+        }
+
+        // ---------- LÓGICA ----------
+        function crearObstaculo(x) {
+            const alturaMin = 80;
+            const alturaMax = ALTO - HUECO - 80;
+            const top = Math.floor(Math.random() * (alturaMax - alturaMin + 1)) + alturaMin;
+            return { x, top, bottom: top + HUECO, pasado: false };
+        }
+
+        function colisionaConTubos(pajaro, tubo) {
+            const radio = 13;
+            const px = pajaro.x, py = pajaro.y;
+            if (px + radio > tubo.x && px - radio < tubo.x + ANCHO_TUBO) {
+                if (py - radio < tubo.top || py + radio > tubo.bottom) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function mostrarCarta() {
+            mostrandoCarta = true;
+            cartaTexto.textContent = MENSAJE_CARTA;
+            overlayCarta.classList.remove('oculto');
+        }
+
+        function cerrarCarta() {
+            overlayCarta.classList.add('oculto');
+            mostrandoCarta = false;
+        }
+
+        function actualizar() {
+            if (!juegoActivo || juegoTerminado || mostrandoCarta) return;
+
+            // Física del pájaro
+            pajaro.velocidad += GRAVEDAD;
+            pajaro.y += pajaro.velocidad;
+            pajaro.rotacion = Math.min(Math.max(pajaro.velocidad * 0.08, -0.5), 0.8);
+
+            // Muerte instantánea al tocar el techo
+            if (pajaro.y - 13 < 0) {
+                terminarJuego();
+                return;
+            }
+
+            // Suelo paciente: solo muere tras 1 segundo quieto
+            const sueloY = ALTO - 25;
+            if (pajaro.y + 13 >= sueloY) {
+                pajaro.y = sueloY - 13;
+                pajaro.velocidad = 0;
+                if (!pajaro.enSuelo) {
+                    pajaro.enSuelo = true;
+                    pajaro.tiempoInicioSuelo = performance.now();
+                }
+                if (performance.now() - pajaro.tiempoInicioSuelo > 1000) {
+                    terminarJuego();
+                    return;
+                }
+            } else {
+                pajaro.enSuelo = false;
+            }
+
+            // Mover obstáculos
+            for (let obs of obstaculos) obs.x -= VELOCIDAD_TUBOS;
+            if (obstaculos.length === 0 || obstaculos[obstaculos.length-1].x < ANCHO - DISTANCIA_ENTRE_TUBOS) {
+                obstaculos.push(crearObstaculo(ANCHO + 20));
+            }
+            obstaculos = obstaculos.filter(obs => {
+                if (obs.x + ANCHO_TUBO < 0) return false;
+                if (!obs.pasado && obs.x + ANCHO_TUBO < pajaro.x - 10) {
+                    obs.pasado = true;
+                    puntuacion++;
+                    beep(700, 0.08, 'sine', 0.1);
+                    if (puntuacion > mejorPuntuacion) mejorPuntuacion = puntuacion;
+                    if (puntuacion === 10 && !cartaMostrada) {
+                        cartaMostrada = true;
+                        mostrarCarta();
+                    }
+                }
+                return true;
+            });
+
+            // Colisión con tubos
+            for (let obs of obstaculos) {
+                if (colisionaConTubos(pajaro, obs)) {
+                    terminarJuego();
+                    break;
+                }
+            }
+        }
+
+        function terminarJuego() {
+            if (!juegoActivo) return;
+            juegoActivo = false;
+            juegoTerminado = true;
+            crearParticulas(pajaro.x, pajaro.y);
+            beep(200, 0.3, 'triangle', 0.2);
+            setTimeout(mostrarGameOver, 400);
+        }
+
+        function mostrarGameOver() {
+            mensajeGameOverDiv.innerHTML = `
+                <p>Ups, moriste, inténtalo de nuevo</p>
+                <span class="te-amo">Te amo ❤️</span>
+            `;
+            scoreFinalSpan.textContent = puntuacion;
+            overlayGameOver.classList.remove('oculto');
+        }
+
+        function aletear() {
+            if (mostrandoCarta) return;
+            if (!juegoActivo) {
+                iniciarJuego();
+                return;
+            }
+            pajaro.velocidad = IMPULSO;
+            beep(500, 0.08, 'square', 0.07);
+            for (let i=0;i<4;i++) {
+                particulas.push({
+                    x: pajaro.x - 8 + Math.random()*16,
+                    y: pajaro.y + 5,
+                    vx: (Math.random()-0.5)*1.5,
+                    vy: -1 - Math.random()*2,
+                    vida: 0.7,
+                    decaimiento: 0.04,
+                    tam: 3+Math.random()*3,
+                });
+            }
+        }
+
+        function reiniciarJuego() {
+            pajaro.y = ALTO / 2;
+            pajaro.velocidad = 0;
+            pajaro.rotacion = 0;
+            pajaro.enSuelo = false;
+            pajaro.tiempoInicioSuelo = 0;
+            obstaculos = [];
+            particulas = [];
+            puntuacion = 0;
+            frameContador = 0;
+            juegoTerminado = false;
+            juegoActivo = true;
+            mostrandoCarta = false;
+            overlayGameOver.classList.add('oculto');
+            overlayCarta.classList.add('oculto');
+            obstaculos.push(crearObstaculo(ANCHO + 100));
+            if (idAnimacion) cancelAnimationFrame(idAnimacion);
+            loop();
+        }
+
+        // ---------- BUCLE ----------
+        function loop() {
+            if (!juegoActivo && !juegoTerminado && !mostrandoCarta) {
+                ctx.clearRect(0,0,ANCHO,ALTO);
+                dibujarFondo();
+                dibujarPajaro();
+                idAnimacion = requestAnimationFrame(loop);
+                return;
+            }
+            actualizar();
+            actualizarParticulas();
+            ctx.clearRect(0, 0, ANCHO, ALTO);
+            dibujarFondo();
+            for (let obs of obstaculos) dibujarObstaculo(obs);
+            dibujarPajaro();
+            dibujarParticulas();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 32px "Segoe UI"';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = 'rgba(0,0,0,0.3)';
+            ctx.shadowBlur = 6;
+            ctx.fillText(puntuacion, ANCHO/2, 70);
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.font = 'italic 14px "Segoe UI"';
+            ctx.fillText(`Para ${nombreNovia} 💌`, ANCHO/2, ALTO-10);
+            frameContador++;
+            idAnimacion = requestAnimationFrame(loop);
+        }
+
+        // ---------- EVENTOS ----------
+        function redimensionar() {
+            const container = document.querySelector('.game-container');
+            const anchoContainer = container.clientWidth;
+            const altoContainer = container.clientHeight;
+            const relacion = ANCHO / ALTO;
+            let nuevoAncho, nuevoAlto;
+            if (anchoContainer / altoContainer > relacion) {
+                nuevoAlto = altoContainer;
+                nuevoAncho = nuevoAlto * relacion;
+            } else {
+                nuevoAncho = anchoContainer;
+                nuevoAlto = nuevoAncho / relacion;
+            }
+            canvas.width = ANCHO;
+            canvas.height = ALTO;
+            canvas.style.width = nuevoAncho + 'px';
+            canvas.style.height = nuevoAlto + 'px';
+        }
+        window.addEventListener('resize', redimensionar);
+        redimensionar();
+
+        function manejarToque(e) {
+            e.preventDefault();
+            initAudio();
+            aletear();
+        }
+        canvas.addEventListener('click', manejarToque);
+        canvas.addEventListener('touchstart', manejarToque, {passive: false});
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp') {
+                e.preventDefault();
+                initAudio();
+                aletear();
+            }
+        });
+
+        function iniciarJuego() {
+            initAudio();
+            nombreNovia = nombreInput.value.trim() || 'Mi Vida';
+            nombreInput.value = nombreNovia;
+            overlayInicio.classList.add('oculto');
+            cartaMostrada = false;
+            reiniciarJuego();
+        }
+
+        btnIniciar.addEventListener('click', iniciarJuego);
+        btnReiniciar.addEventListener('click', () => {
+            overlayGameOver.classList.add('oculto');
+            reiniciarJuego();
+        });
+        btnCerrarCarta.addEventListener('click', cerrarCarta);
+        nombreInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') iniciarJuego();
+        });
+
+        // Dibujo inicial
+        (function dibujoInicial() {
+            ctx.clearRect(0,0,ANCHO,ALTO);
+            dibujarFondo();
+            dibujarPajaro();
+            requestAnimationFrame(dibujoInicial);
+        })();
+
+        loop();
+        console.log('💘 Flappy Heart con poema corregido y ampliado. ¡Te amo Noa!');
+    })();
+</script>
+</body>
+</html>
